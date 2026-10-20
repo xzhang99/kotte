@@ -1,6 +1,6 @@
-# Bomberman World — [your game title]
+# Bomberman World — [Edgerunner]
 
-**Student:** [your name]
+**Student:** [Xuyang Zhang]
 
 > Replace the prompts below and remove these instructions. Keep answers brief. Your implementation explanations and reflection belong in the presentation; you do not need to write them out here. Complete the final section only if seeking Pass with Distinction (VG).
 
