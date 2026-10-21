@@ -73,6 +73,13 @@ namespace kotte
             float remaining_seconds = 0.0f;
         };
 
+        enum class RoundState : std::uint8_t
+        {
+            playing,
+            won,
+            lost
+        };
+
         void run_frame(float delta_time);
         void begin_frame() noexcept;
         void collect_frame_actions() noexcept;
@@ -84,6 +91,7 @@ namespace kotte
         void update_player(float delta_time);
         void try_move_player(Vector2 axis_displacement);
         void update_enemies(float delta_time);
+        void check_player_enemy_contact();
         void queue_bomb_placement();
         void apply_entity_destructions();
         void apply_bomb_placements();
@@ -157,6 +165,8 @@ namespace kotte
         CollisionDiagnostics collision_diagnostics_;
         std::uint64_t seed_;
         EntityHandle player_handle_;
+        RoundState round_state_ = RoundState::playing;
+        bool player_hit_this_frame_ = false;
         bool exit_requested_ = false;
     };
 }

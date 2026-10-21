@@ -64,11 +64,16 @@ namespace kotte
         assert(destroy_entity_requests_.empty());
         frame_actions_ = {};
         collision_diagnostics_ = {};
+        player_hit_this_frame_ = false;
     }
 
     void Application::collect_frame_actions() noexcept{
         if(IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)){
             request_exit();
+        }
+        if (round_state_ != RoundState::playing)
+        {
+            return;
         }
         frame_actions_.place_bomb = IsKeyPressed(KEY_SPACE);
 
@@ -93,9 +98,14 @@ namespace kotte
     }
 
     void Application::update_gameplay(float delta_time){
+        if (round_state_ != RoundState::playing)
+        {
+            return;
+        }
         // The player and every enemy are movers; each asks its own collision question.
         update_player(delta_time);
         update_enemies(delta_time);
+        check_player_enemy_contact();
         queue_bomb_placement();
     }
 
@@ -152,6 +162,12 @@ namespace kotte
         }
 
         bomb_detonated_facts_.clear();
+
+        if (round_state_ == RoundState::playing && player_hit_this_frame_)
+        {
+            round_state_ = RoundState::lost;
+            destroy_entity_requests_.push_back({ player_handle_ });
+        }
     }
 
     void Application::apply_structural_mutations(){
@@ -221,6 +237,7 @@ namespace kotte
     void Application::update_enemies(float delta_time){
         // The update list contains every enemy, not only those returned by the
         // camera query. Off-screen enemies therefore keep simulating normally.
+        
         for(const EntityHandle enemy_handle : enemy_handles_){
             // Each enemy is one mover with one cardinal movement attempt.
             ++collision_diagnostics_.enemy_updates;
@@ -250,6 +267,33 @@ namespace kotte
         }
     }
 
+    void Application::check_player_enemy_contact()
+    {
+        const Entity* player_entity = entities_.try_get(player_handle_);
+        if (player_entity == nullptr)
+        {
+            return;
+        }
+
+        const Rectangle player_bounds = entity_collision_bounds(*player_entity);
+
+        const SpatialQuery candidates = spatial_grid_.query(player_bounds);
+
+        for (const EntityHandle handle : candidates.entity_handles)
+        {
+            const Entity* candidate = entities_.try_get(handle);
+            if (candidate == nullptr || candidate->kind != EntityKind::enemy)
+            {
+                continue;
+            }
+
+            if (CheckCollisionRecs(player_bounds, entity_collision_bounds(*candidate)))
+            {
+                player_hit_this_frame_ = true;
+                return;
+            }
+        }
+    }
     void Application::queue_bomb_placement(){
         if(!frame_actions_.place_bomb){
             return;
@@ -360,8 +404,9 @@ namespace kotte
                 destroy_entity_requests_.push_back({handle});
                 blocked_by_crate = true;
                 break;
-            case EntityKind::player:
                 // Player-hit consequences are outside the Week 6 lifetime seam.
+            case EntityKind::player:
+                player_hit_this_frame_ = true;
                 break;
             }
         }
@@ -392,7 +437,10 @@ namespace kotte
     void Application::update_camera(float delta_time) noexcept{
         (void) delta_time; // name the argument to avoid the static analyzer yelling at us. :) We'll animate the camera later.
         camera_.set_viewport_size(window_.size());
-        camera_.set_centre(player().world_position);
+        if (const Entity* player_entity = entities_.try_get(player_handle_))
+        {
+            camera_.set_centre(player_entity->world_position);
+        }
     }
 
     void Application::render(){
@@ -546,6 +594,12 @@ namespace kotte
         DrawText(diagnostics.c_str(), 10, window_.height() - 54, 20, RAYWHITE);
 
         DrawText("move: WASD/arrows | bomb: Space | quit: Q/Escape", 10, window_.height() - 30, 20, LIGHTGRAY);
+
+        const char* state_text = round_state_ == RoundState::playing ? "PLAYING"
+            : (round_state_ == RoundState::won ? "WON" : "LOST");
+        const Color state_color = round_state_ == RoundState::playing ? GREEN
+            : (round_state_ == RoundState::won ? GOLD : RED);
+        DrawText(std::format("state: {}", state_text).c_str(), 10, 130, 24, state_color);
     }
 
     void Application::populate_entities(){
@@ -700,18 +754,18 @@ namespace kotte
         return blocked;
     }
 
-    bool Application::is_solid(EntityKind kind) noexcept{
-        switch(kind){
-        case EntityKind::player:
-        case EntityKind::crate:
-        case EntityKind::enemy:
-            return true;
-        case EntityKind::bomb:
-            return false;
-        }
-
+  bool Application::is_solid(EntityKind kind) noexcept{
+    switch(kind){
+    case EntityKind::crate:
+        return true;
+    case EntityKind::player:
+    case EntityKind::enemy:
+    case EntityKind::bomb:
         return false;
     }
+
+    return false;
+}
 
     Vector2 Application::cardinal_vector(CardinalDirection direction) noexcept{
         switch(direction){
