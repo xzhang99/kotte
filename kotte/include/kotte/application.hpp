@@ -50,6 +50,9 @@ namespace kotte
         struct FrameActions final {
             Vector2 player_movement_direction{};
             bool place_bomb = false;
+            bool restart_round = false;
+            bool select_gameplay_config = false;
+            bool select_stress_config = false;
         };
 
         struct PlaceBombRequest final {
@@ -108,6 +111,7 @@ namespace kotte
             std::uint8_t range);
         void update_camera(float delta_time) noexcept;
         void render();
+        void restart_round();
         void populate_entities();
         void initialize_enemies();
         [[nodiscard]] Entity& entity(EntityHandle handle) noexcept;
@@ -128,6 +132,11 @@ namespace kotte
         [[nodiscard]] static Color entity_color(EntityKind kind) noexcept;
         [[nodiscard]] static float entity_roundness(EntityKind kind) noexcept;
         static constexpr int tile_size_ = 40;
+        //pressure test
+        static constexpr int gameplay_room_width_ = 15;
+        static constexpr int gameplay_room_height_ = 11;
+        static constexpr int stress_room_width_ = 200;
+        static constexpr int stress_room_height_ = 120;
         static constexpr int spatial_cell_tiles_ = 8;
         static constexpr float spatial_cell_size_ = tile_size_ * spatial_cell_tiles_;
         static constexpr float player_speed_ = 240.0f;
@@ -167,6 +176,7 @@ namespace kotte
         EntityHandle player_handle_;
         RoundState round_state_ = RoundState::playing;
         bool player_hit_this_frame_ = false;
+        bool stress_mode_ = false;
         bool exit_requested_ = false;
     };
 }

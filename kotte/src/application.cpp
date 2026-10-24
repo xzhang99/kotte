@@ -19,7 +19,7 @@ namespace kotte
         : window_{width, height, title, target_fps}
         , camera_{window_.size()}
         , random_{seed}
-        , map_{make_room(200, 120, random_)}
+        , map_{make_room(gameplay_room_width_, gameplay_room_height_, random_)}
         , spatial_grid_{{
             static_cast<float>(map_.width() * tile_size_),
             static_cast<float>(map_.height() * tile_size_)}, spatial_cell_size_}
@@ -71,6 +71,9 @@ namespace kotte
         if(IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q)){
             request_exit();
         }
+        frame_actions_.restart_round = IsKeyPressed(KEY_R);
+        frame_actions_.select_gameplay_config = IsKeyPressed(KEY_ONE);
+        frame_actions_.select_stress_config = IsKeyPressed(KEY_TWO);
         if (round_state_ != RoundState::playing)
         {
             return;
@@ -110,6 +113,10 @@ namespace kotte
     }
 
     void Application::update_timed_gameplay(float delta_time){
+        if (round_state_ != RoundState::playing)
+        {
+            return;
+        }
         // This list is independent of camera queries, so off-screen fuses advance.
         for(const EntityHandle bomb_handle : active_bomb_handles_){
             Entity* bomb = entities_.try_get(bomb_handle);
@@ -165,14 +172,50 @@ namespace kotte
 
         if (round_state_ == RoundState::playing && player_hit_this_frame_)
         {
-            round_state_ = RoundState::lost;
+            /*round_state_ = RoundState::lost;*/
             destroy_entity_requests_.push_back({ player_handle_ });
         }
     }
 
     void Application::apply_structural_mutations(){
+        if (frame_actions_.select_gameplay_config)
+        {
+            stress_mode_ = false;
+            restart_round();
+            return;
+        }
+        if (frame_actions_.select_stress_config)
+        {
+            stress_mode_ = true;
+            restart_round();
+            return;
+        }
+        if (frame_actions_.restart_round)
+        {
+            restart_round();
+            return;
+        }
+
         // Entity storage and every derived index change only at this boundary.
         apply_entity_destructions();
+        if (round_state_ == RoundState::playing)
+        {
+            // Priority rule: player death takes priority over objective completion
+            // if both happen in the same frame.
+            if (player_hit_this_frame_ || !entities_.contains(player_handle_))
+            {
+                round_state_ = RoundState::lost;
+            }
+            else if (enemy_handles_.empty())
+            {
+                round_state_ = RoundState::won;
+            }
+        }
+
+        if (round_state_ != RoundState::playing)
+        {
+            place_bomb_requests_.clear();
+        }
         apply_bomb_placements();
     }
 
@@ -599,7 +642,43 @@ namespace kotte
             : (round_state_ == RoundState::won ? "WON" : "LOST");
         const Color state_color = round_state_ == RoundState::playing ? GREEN
             : (round_state_ == RoundState::won ? GOLD : RED);
-        DrawText(std::format("state: {}", state_text).c_str(), 10, 130, 24, state_color);
+        DrawText(
+            std::format("state: {} | objective: defeat all enemies ({} left)",
+                state_text,
+                enemy_handles_.size()).c_str(),10, 130, 24, state_color);    
+}
+
+    void Application::restart_round()
+    {
+        const int room_width = stress_mode_ ? stress_room_width_ : gameplay_room_width_;
+        const int room_height = stress_mode_ ? stress_room_height_ : gameplay_room_height_;
+
+        random_ = Random{ seed_ };
+        map_ = make_room(room_width, room_height, random_);
+        entities_ = EntityStore{};
+        enemy_handles_.clear();
+        active_bomb_handles_.clear();
+        spatial_grid_ = SpatialGrid{
+            {
+                static_cast<float>(map_.width() * tile_size_),
+                static_cast<float>(map_.height() * tile_size_)
+            },
+            spatial_cell_size_
+        };
+
+        place_bomb_requests_.clear();
+        bomb_detonated_facts_.clear();
+        destroy_entity_requests_.clear();
+        blast_effects_.clear();
+        frame_actions_ = {};
+        collision_diagnostics_ = {};
+        player_handle_ = {};
+        round_state_ = RoundState::playing;
+        player_hit_this_frame_ = false;
+
+        populate_entities();
+        initialize_enemies();
+        update_camera(0.0f);
     }
 
     void Application::populate_entities(){
