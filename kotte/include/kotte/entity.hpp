@@ -23,6 +23,19 @@ namespace kotte
         left
     };
 
+    enum class EnemyBehaviour : std::uint8_t
+    {
+        patrol,
+        pursue，
+        kamikaze
+    };
+    //third enemy type
+    enum class KamikazeState : std::uint6_t
+    {
+        searching,
+        charging,
+        detonating
+    };
     struct BombState final {
         EntityHandle owner;
         float fuse_remaining = 0.0f;
@@ -35,6 +48,12 @@ namespace kotte
         EntityKind kind = EntityKind::crate;
         Vector2 world_position{};
         CardinalDirection movement_heading = CardinalDirection::right;
+
+        EnemyBehaviour enemy_behaviour = EnemyBehaviour::patrol;
+        KamikzeState kamikaze_state = KamikazeSate::searching;
+        float explosion_timer = 0.0f;
+        float decision_timer = 0.0f;
+
         std::optional<BombState> bomb_state;
     };
 }

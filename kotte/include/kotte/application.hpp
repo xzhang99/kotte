@@ -127,6 +127,10 @@ namespace kotte
         [[nodiscard]] static bool is_solid(EntityKind kind) noexcept;
         [[nodiscard]] static Vector2 cardinal_vector(CardinalDirection direction) noexcept;
         [[nodiscard]] CardinalDirection different_enemy_direction(CardinalDirection current_direction);
+        [[nodiscard]] CardinalDirection pursue_enemy_direction(
+            Vector2 enemy_position,
+            CardinalDirection current_direction) const noexcept;
+
         [[nodiscard]] bool owner_has_active_bomb(EntityHandle owner) const noexcept;
         [[nodiscard]] static Vector2 tile_centre(Vector2 world_position) noexcept;
         [[nodiscard]] static Vector2 tile_centre(int column, int row) noexcept;
@@ -142,7 +146,14 @@ namespace kotte
         static constexpr float spatial_cell_size_ = tile_size_ * spatial_cell_tiles_;
         static constexpr float player_speed_ = 240.0f;
         static constexpr float enemy_speed_ = 80.0f;
+        static constexpr float enemy_direction_interval_ = 0.25;
         static constexpr float bomb_fuse_seconds_ = 2.0f;
+        //3enemy behaviours
+        static constexpr float speed_patrol_ = 80.0f;
+        static constexpr float speed_pursue_ = 80.0f;
+        static constexpr float speed_kamikaze_charge_ = 180.0f;
+        static constexpr float kamikaze_fuse_seconds_ = 2.0f;
+        static constexpr float kamikaze_detect_radius_ = 160.0f;
         static constexpr std::uint8_t bomb_blast_range_ = 3;
         static constexpr std::uint8_t max_bomb_blast_range_ = 6;
         static constexpr float blast_effect_seconds_ = 0.35f;
@@ -157,6 +168,8 @@ namespace kotte
         static constexpr Color blast_color_{0xf2, 0x8f, 0x3b, 0xe8};
         static constexpr Color crate_color_{0xb0, 0x72, 0x3c, 0xff};
         static constexpr Color enemy_color_{0xd9, 0x4f, 0x70, 0xff};
+        static constexpr Color pursue_enemy_color_{ 0xd9, 0x5d, 0xe5, 0xff };
+
         static constexpr Color wall_color_{0x78, 0x5f, 0x47, 0xff};
         static constexpr Color pickup_color_{ 0x4e, 0xd9, 0x8f, 0xff };;
 
