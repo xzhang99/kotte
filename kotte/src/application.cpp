@@ -487,9 +487,30 @@ namespace kotte
             const Vector2 step = cardinal_vector(bomb->bomb_state->move_direction) * (bomb_slide_speed_ * delta_time);
             const Vector2 proposed_position = bomb->world_position + step;
 
-            if (entity_movement_is_blocked(bomb_handle, proposed_position))
+            //the bomb slips inside enemies since is_solid == false, it just get stucked in the same pos rn
+            //special check for enemies
+            bool hit_enemy = false;
+            Entity probe = *bomb;
+            probe.world_position = proposed_position;
+            const Rectangle proposed_bounds = entity_collision_bounds(probe);
+            for (const EntityHandle candidate_handle :
+            spatial_grid_.query(proposed_bounds).entity_handles)
+            {
+                const Entity* candidate = entities_.try_get(candidate_handle);
+                if (candidate != nullptr && candidate->kind == EntityKind::enemy
+                    && CheckCollisionRecs(proposed_bounds, entity_collision_bounds(*candidate)))
+                {
+                    hit_enemy = true;
+                    break;
+                }
+            }
+
+            //when its blocked, snap it to grid
+            if (hit_enemy|| entity_movement_is_blocked(bomb_handle, proposed_position))
             {
                 bomb->bomb_state->is_moving = false;
+                bomb->world_position = tile_centre(bomb->world_position);
+                spatial_grid_.update(bomb_handle, old_world_bounds, entity_world_bounds(*bomb));
                 continue;
             }
 
