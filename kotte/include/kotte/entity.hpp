@@ -42,6 +42,8 @@ namespace kotte
         std::uint8_t blast_range = 0;
         bool detonation_requested = false;
         bool owner_overlapping = true;
+        bool is_moving = false;
+        CardinalDirection move_direction = CardinalDirection::right;
     };
 
     struct Entity final {

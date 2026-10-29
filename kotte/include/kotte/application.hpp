@@ -107,6 +107,7 @@ namespace kotte
         void update_player(float delta_time);
         void try_move_player(Vector2 axis_displacement);
         void update_enemies(float delta_time);
+        void update_bombs(float delta_time);
         void check_player_enemy_contact();
         void check_player_pickup_contact();
         void queue_bomb_placement();
@@ -158,6 +159,8 @@ namespace kotte
         static constexpr int spatial_cell_tiles_ = 8;
         static constexpr float spatial_cell_size_ = tile_size_ * spatial_cell_tiles_;
         static constexpr float player_speed_ = 240.0f;
+        //kickable bomb
+        static constexpr float bomb_slide_speed_ = 220.0f;
         static constexpr float enemy_speed_ = 80.0f;
         //for the third detonation enemy
         static constexpr float kamikaze_charge_speed_ = 180.0f;

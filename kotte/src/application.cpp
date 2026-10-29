@@ -121,6 +121,7 @@ namespace kotte
         }
         // The player and every enemy are movers; each asks its own collision question.
         update_player(delta_time);
+        update_bombs(delta_time);
         update_enemies(delta_time);
         check_player_enemy_contact();
         check_player_pickup_contact();
@@ -423,22 +424,79 @@ namespace kotte
 
     void Application::try_move_player(Vector2 axis_displacement)
     {
-        // Propose one horizontal or vertical player movement.
-        ++collision_diagnostics_.movement_attempts;
+        if (axis_displacement.x == 0.0f && axis_displacement.y == 0.0f)
+        {
+            return;
+        }
 
         Entity& player_entity = player();
         const Vector2 proposed_position = player_entity.world_position + axis_displacement;
 
         // Detect possible contacts using the mover's proposed collision bounds.
         if (entity_movement_is_blocked(player_handle_, proposed_position))
-        {
-            // Respond by rejecting only this blocked player axis.
+        {   
+            Entity probe = player_entity;
+            probe.world_position = proposed_position;
+            const Rectangle proposed_bounds = entity_collision_bounds(probe);
+            const SpatialQuery query = spatial_grid_.query(proposed_bounds);
             ++collision_diagnostics_.blocked_moves;
+
+            for (const EntityHandle handle : query.entity_handles)
+            {
+                Entity* candidate = entities_.try_get(handle);
+                if (candidate == nullptr || candidate->kind != EntityKind::bomb
+                    || !candidate->bomb_state.has_value()
+                    || candidate->bomb_state->owner_overlapping)
+                {
+                    continue;
+                }
+                if (CheckCollisionRecs(proposed_bounds, entity_collision_bounds(*candidate)))
+                {
+                    candidate->bomb_state->is_moving = true;
+                    if (std::abs(axis_displacement.x) >= std::abs(axis_displacement.y))
+                    {
+                        candidate->bomb_state->move_direction = axis_displacement.x > 0.0f
+                            ? CardinalDirection::right : CardinalDirection::left;
+                    }
+                    else
+                    {
+                        candidate->bomb_state->move_direction = axis_displacement.y > 0.0f
+                            ? CardinalDirection::down : CardinalDirection::up;
+                    }
+                }
+            }
+
             return;
         }
 
         // Accept the clear proposal; grid synchronization happens after both axes.
         player_entity.world_position = proposed_position;
+    }
+
+    void Application::update_bombs(float delta_time)
+    {
+        for (const EntityHandle bomb_handle : active_bomb_handles_)
+        {
+            Entity* bomb = entities_.try_get(bomb_handle);
+            if (bomb == nullptr || !bomb->bomb_state.has_value() || !bomb->bomb_state->is_moving)
+            {
+                continue;
+            }
+
+            const Rectangle old_world_bounds = entity_world_bounds(*bomb);
+            const Vector2 step = cardinal_vector(bomb->bomb_state->move_direction) * (bomb_slide_speed_ * delta_time);
+            const Vector2 proposed_position = bomb->world_position + step;
+
+            if (entity_movement_is_blocked(bomb_handle, proposed_position))
+            {
+                bomb->bomb_state->is_moving = false;
+                continue;
+            }
+
+            bomb->world_position = proposed_position;
+            const Rectangle new_world_bounds = entity_world_bounds(*bomb);
+            spatial_grid_.update(bomb_handle, old_world_bounds, new_world_bounds);
+        }
     }
 
     void Application::update_enemies(float delta_time)
