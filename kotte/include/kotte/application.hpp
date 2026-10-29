@@ -17,7 +17,8 @@
 
 namespace kotte
 {
-    struct CollisionDiagnostics final {
+    struct CollisionDiagnostics final
+    {
         std::size_t enemy_updates = 0;
         std::size_t movement_attempts = 0;
         std::size_t spatial_queries = 0;
@@ -31,7 +32,8 @@ namespace kotte
         std::size_t enemy_turns = 0;
     };
 
-    class Application final{
+    class Application final
+    {
     public:
         Application(
             int window_width,
@@ -47,7 +49,8 @@ namespace kotte
         void request_exit() noexcept;
 
     private:
-        struct FrameActions final {
+        struct FrameActions final
+        {
             Vector2 player_movement_direction{};
             bool place_bomb = false;
             bool restart_round = false;
@@ -55,23 +58,33 @@ namespace kotte
             bool select_stress_config = false;
         };
 
-        struct PlaceBombRequest final {
+        struct PlaceBombRequest final
+        {
             EntityHandle owner;
             Vector2 world_position{};
         };
 
-        struct BombDetonated final {
+        struct BombDetonated final
+        {
             EntityHandle bomb;
             EntityHandle owner;
             Vector2 world_position{};
             std::uint8_t blast_range = 0;
         };
 
-        struct DestroyEntityRequest final {
+        struct SquareBlastFact final
+        {
+            EntityHandle attacker;
+            Vector2 world_position{};
+            std::uint8_t radius_tiles = 2;
+        };
+        struct DestroyEntityRequest final
+        {
             EntityHandle entity;
         };
 
-        struct BlastEffect final {
+        struct BlastEffect final
+        {
             std::vector<Vector2> tile_centres;
             float remaining_seconds = 0.0f;
         };
@@ -127,10 +140,10 @@ namespace kotte
         [[nodiscard]] static bool is_solid(EntityKind kind) noexcept;
         [[nodiscard]] static Vector2 cardinal_vector(CardinalDirection direction) noexcept;
         [[nodiscard]] CardinalDirection different_enemy_direction(CardinalDirection current_direction);
-        [[nodiscard]] CardinalDirection pursue_enemy_direction(
+        [[nodiscard]] CardinalDirection pursuit_enemy_direction(
             Vector2 enemy_position,
             CardinalDirection current_direction) const noexcept;
-
+        [[nodiscard]] static float enemy_movement_speed(const Entity& enemy) noexcept;
         [[nodiscard]] bool owner_has_active_bomb(EntityHandle owner) const noexcept;
         [[nodiscard]] static Vector2 tile_centre(Vector2 world_position) noexcept;
         [[nodiscard]] static Vector2 tile_centre(int column, int row) noexcept;
@@ -146,7 +159,11 @@ namespace kotte
         static constexpr float spatial_cell_size_ = tile_size_ * spatial_cell_tiles_;
         static constexpr float player_speed_ = 240.0f;
         static constexpr float enemy_speed_ = 80.0f;
-        static constexpr float enemy_direction_interval_ = 0.25;
+        //for the third detonation enemy
+        static constexpr float kamikaze_charge_speed_ = 180.0f;
+        static constexpr float enemy_decision_interval_ = 0.25f;
+        static constexpr std::uint8_t kamikaze_blast_radius_tiles_ = 2;
+        static constexpr float enemy_direction_interval_ = 0.25f;
         static constexpr float bomb_fuse_seconds_ = 2.0f;
         //3enemy behaviours
         static constexpr float speed_patrol_ = 80.0f;
@@ -157,20 +174,21 @@ namespace kotte
         static constexpr std::uint8_t bomb_blast_range_ = 3;
         static constexpr std::uint8_t max_bomb_blast_range_ = 6;
         static constexpr float blast_effect_seconds_ = 0.35f;
-        static constexpr Color background_color_{0x11, 0x22, 0x33, 0xff};
+        static constexpr Color background_color_{ 0x11, 0x22, 0x33, 0xff };
         static constexpr Color floor_colors_[3]{
-            Color{0x38, 0x49, 0x52, 0xff},
-            Color{0x3d, 0x4f, 0x59, 0xff},
-            Color{0x42, 0x55, 0x60, 0xff}
+            Color{ 0x38, 0x49, 0x52, 0xff },
+            Color{ 0x3d, 0x4f, 0x59, 0xff },
+            Color{ 0x42, 0x55, 0x60, 0xff }
         };
-        static constexpr Color player_color_{0xf2, 0xc1, 0x4e, 0xff};
-        static constexpr Color bomb_color_{0x20, 0x24, 0x2a, 0xff};
-        static constexpr Color blast_color_{0xf2, 0x8f, 0x3b, 0xe8};
-        static constexpr Color crate_color_{0xb0, 0x72, 0x3c, 0xff};
-        static constexpr Color enemy_color_{0xd9, 0x4f, 0x70, 0xff};
+        static constexpr Color player_color_{ 0xf2, 0xc1, 0x4e, 0xff };
+        static constexpr Color bomb_color_{ 0x20, 0x24, 0x2a, 0xff };
+        static constexpr Color blast_color_{ 0xf2, 0x8f, 0x3b, 0xe8 };
+        static constexpr Color crate_color_{ 0xb0, 0x72, 0x3c, 0xff };
+        static constexpr Color enemy_color_{ 0xd9, 0x4f, 0x70, 0xff };
         static constexpr Color pursue_enemy_color_{ 0xd9, 0x5d, 0xe5, 0xff };
+        static constexpr Color kamikaze_enemy_color_{ 0xff, 0x59, 0x5e, 0xff };
 
-        static constexpr Color wall_color_{0x78, 0x5f, 0x47, 0xff};
+        static constexpr Color wall_color_{ 0x78, 0x5f, 0x47, 0xff };
         static constexpr Color pickup_color_{ 0x4e, 0xd9, 0x8f, 0xff };;
 
         Window window_; // Constructed first, destroyed last.
@@ -185,6 +203,9 @@ namespace kotte
         FrameActions frame_actions_;
         std::vector<PlaceBombRequest> place_bomb_requests_;
         std::vector<BombDetonated> bomb_detonated_facts_;
+
+        //the third detonation enemy
+        std::vector<SquareBlastFact> square_blast_facts_;
         std::vector<DestroyEntityRequest> destroy_entity_requests_;
         std::vector<BlastEffect> blast_effects_;
         CollisionDiagnostics collision_diagnostics_;

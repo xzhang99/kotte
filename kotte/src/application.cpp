@@ -66,6 +66,7 @@ namespace kotte
         // Every request must be consumed by the previous frame's mutation phase.
         assert(place_bomb_requests_.empty());
         assert(bomb_detonated_facts_.empty());
+        assert(square_blast_facts_.empty());
         assert(destroy_entity_requests_.empty());
         frame_actions_ = {};
         collision_diagnostics_ = {};
@@ -163,18 +164,30 @@ namespace kotte
         }
 
         //countdown and timed gameplay phase
-        if (enemy.enemy_behaviour == EnemyBehaviour::kamikaze && enemy.kamikaze_state == KamikazeState::charging)
+        for (const EntityHandle enemy_handle : enemy_handles_)
         {
-            enemy.explosion_timer -= delta_time;
-            if (enemy.explosion_timer <= 0.0f)
+            Entity* enemy = entities_.try_get(enemy_handle);
+            if (enemy == nullptr
+                || enemy->enemy_behaviour != EnemyBehaviour::kamikaze
+                || enemy->kamikaze_state != KamikazeState::charging)
             {
-                enemy.kamikaze_state = KamikazeState::detonating;
+                continue;
+            }
+
+            enemy->explosion_timer -= delta_time;
+            if (enemy->explosion_timer > 0.0f)
+            {
+                continue;
+            }
+
+            enemy->explosion_timer = 0.0f;
+            enemy->kamikaze_state = KamikazeState::detonating;
                 //only push the event here, not killing the object
                 square_blast_facts_.push_back({
                     enemy_handle,
-                    enemy.world_position,2
-                    });
-            }
+                    enemy->world_position,
+                    kamikaze_blast_radius_tiles_
+                    }); 
         }
     }
 
@@ -205,6 +218,69 @@ namespace kotte
 
         bomb_detonated_facts_.clear();
 
+        for (const SquareBlastFact& fact : square_blast_facts_)
+        {
+            const float tile_extent = static_cast<float>(tile_size_);
+            const int centre_column = static_cast<int>(std::floor(fact.world_position.x / tile_extent));
+            const int centre_row = static_cast<int>(std::floor(fact.world_position.y / tile_extent));
+            const int radius = static_cast<int>(fact.radius_tiles);
+
+            BlastEffect effect;
+            effect.remaining_seconds = blast_effect_seconds_;
+            for (int row = centre_row - radius; row <= centre_row + radius; ++row)
+            {
+                for (int column = centre_column - radius; column <= centre_column + radius; ++column)
+                {
+                    if (!map_.contains(column, row) || map_.at(column, row).type == TileType::wall)
+                    {
+                        continue;
+                    }
+                    effect.tile_centres.push_back(tile_centre(column, row));
+                }
+            }
+            blast_effects_.push_back(std::move(effect));
+
+            const Rectangle blast_box{
+                static_cast<float>(centre_column - radius) * tile_extent,
+                static_cast<float>(centre_row - radius) * tile_extent,
+                static_cast<float>(radius * 2 + 1) * tile_extent,
+                static_cast<float>(radius * 2 + 1) * tile_extent
+            };
+
+            const SpatialQuery contacts = spatial_grid_.query(blast_box);
+            for (const EntityHandle handle : contacts.entity_handles)
+            {
+                const Entity* candidate = entities_.try_get(handle);
+                if (candidate == nullptr
+                    || !CheckCollisionRecs(blast_box, entity_collision_bounds(*candidate)))
+                {
+                    continue;
+                }
+
+                switch (candidate->kind)
+                {
+                case EntityKind::bomb:
+                case EntityKind::enemy:
+                case EntityKind::crate:
+                    destroy_entity_requests_.push_back({ handle });
+                    break;
+                case EntityKind::player:
+                    player_hit_this_frame_ = true;
+                    break;
+                case EntityKind::pickup:
+                    break;
+                }
+            }
+
+            destroy_entity_requests_.push_back({ fact.attacker });
+        }
+        square_blast_facts_.clear();
+
+        if (round_state_ == RoundState::playing && player_hit_this_frame_)
+        {
+            destroy_entity_requests_.push_back({ player_handle_ });
+        }
+
         if (round_state_ == RoundState::playing && player_hit_this_frame_)
         {
             /*round_state_ = RoundState::lost;*/
@@ -213,30 +289,31 @@ namespace kotte
 
         //resolving the new detonation using spatial_grid and narrow filtering
 
-        for (const auto& fact : square_blast_facts_)
-        {
-            Rectangle blast_box = {
-                fact.world_position.x - (fact.radius * tile_size_),
-                fact.world_position.y - (fact.radius * tile_size_),
-                (fact.radius * 2 + 1) * tile_size_,
-                (fact.radius * 2 + 1) * tile_size_
-            };
+        //for (const auto& fact : square_blast_facts_)
+        //{
+        //    Rectangle blast_box = {
+        //        fact.world_position.x - (fact.radius * tile_size_),
+        //        fact.world_position.y - (fact.radius * tile_size_),
+        //        (fact.radius * 2 + 1) * tile_size_,
+        //        (fact.radius * 2 + 1) * tile_size_
+        //    };
 
-            const SpatialQuery contacts = spatial_grid_.query(blast_box);
-            for (const EntityHandle handle : contacts.entity_handles)
-            {
-                const Entity* candidate = entities_.try_get(handle);
-                if (candidate && CheckCollisionRecs(blast_box, entity_collision_bounds(*candidate)))
-                {
-                    destroy_entity_requests_.push_back({ handle });
-                }
-            }
+        //    const SpatialQuery contacts = spatial_grid_.query(blast_box);
+        //    for (const EntityHandle handle : contacts.entity_handles)
+        //    {
+        //        const Entity* candidate = entities_.try_get(handle);
+        //        if (candidate && CheckCollisionRecs(blast_box, entity_collision_bounds(*candidate)))
+        //        {
+        //            destroy_entity_requests_.push_back({ handle });
+        //        }
+        //    }
 
-            destroy_entity_requests_.push_back({ fact.enemy });
+        //    destroy_entity_requests_.push_back({ fact.enemy });
 
 
-            //vfx for blast effects later?
-        }
+
+            //vfx for blast effects later
+
     }
 
     void Application::apply_structural_mutations()
@@ -366,72 +443,65 @@ namespace kotte
 
     void Application::update_enemies(float delta_time)
     {
-        // The update list contains every enemy, not only those returned by the
-        // camera query. Off-screen enemies therefore keep simulating normally.
+        const Entity* player_entity = entities_.try_get(player_handle_);
 
         for (const EntityHandle enemy_handle : enemy_handles_)
         {
-            // Each enemy is one mover with one cardinal movement attempt.
             ++collision_diagnostics_.enemy_updates;
             ++collision_diagnostics_.movement_attempts;
 
             Entity& enemy = entity(enemy_handle);
+
+            if (enemy.enemy_behaviour == EnemyBehaviour::kamikaze
+                && enemy.kamikaze_state == KamikazeState::searching
+                && player_entity != nullptr)
+            {
+                const float distance_to_player = Vector2Distance(
+                    enemy.world_position,
+                    player_entity->world_position);
+                if (distance_to_player <= kamikaze_detect_radius_)
+                {
+                    enemy.kamikaze_state = KamikazeState::charging;
+                    enemy.explosion_timer = kamikaze_fuse_seconds_;
+                    enemy.decision_timer = 0.0f;
+                }
+            }
+
+            const bool should_pursue = (enemy.enemy_behaviour == EnemyBehaviour::pursue)
+                || (enemy.enemy_behaviour == EnemyBehaviour::kamikaze
+                    && enemy.kamikaze_state == KamikazeState::charging);
+
+            if (should_pursue)
+            {
+                enemy.decision_timer -= delta_time;
+                if (enemy.decision_timer <= 0.0f)
+                {
+                    enemy.movement_heading = pursuit_enemy_direction(
+                        enemy.world_position,
+                        enemy.movement_heading);
+                    enemy.decision_timer = enemy_decision_interval_;
+                }
+            }
+
             const Rectangle old_world_bounds = entity_world_bounds(enemy);
-            // Propose one cardinal movement for this enemy.
             const Vector2 direction = cardinal_vector(enemy.movement_heading);
-            const Vector2 displacement = direction * (enemy_speed_ * delta_time);
+            const float current_speed = enemy_movement_speed(enemy);
+            const Vector2 displacement = direction * (current_speed * delta_time);
             const Vector2 proposed_position = enemy.world_position + displacement;
 
-            // Detect a possible contact using this enemy's proposed bounds.
             if (entity_movement_is_blocked(enemy_handle, proposed_position))
             {
-                // Respond by turning without moving; retry the new heading next update.
                 ++collision_diagnostics_.blocked_moves;
                 ++collision_diagnostics_.enemy_turns;
                 enemy.movement_heading = different_enemy_direction(enemy.movement_heading);
+                enemy.decision_timer = enemy_decision_interval_;
                 continue;
             }
 
             enemy.world_position = proposed_position;
             const Rectangle new_world_bounds = entity_world_bounds(enemy);
-
-            // Synchronize this accepted move before the next enemy query.
             spatial_grid_.update(enemy_handle, old_world_bounds, new_world_bounds);
         }
-
-        //kamikaze detecting and pursuing algorithm
-        if (enemy.enemy_behaviour == EnemeyBehaviour::kamikaze)
-        {
-            if (enemy.kamikaze_state == KamikazeState::searching)
-            {
-                if (Vector2Distance(enemy.world_position, player_entity->world position)
-                    <= kamikaze_detect_radius_)
-                {
-                    enemy.kamikaze_state = KamikazeState::charging;
-                    enemy.explosion_timer = kamikaze_fuse_seconds;
-
-                }
-                else
-                {
-                    // patrol
-                }
-            }
-
-            else if (enemy.kamikaze_state == KamikazeState::charging)
-            {
-                //ignore decision_timer
-                enemy.movement_heading = pursuit_enemy_direction(enemy.world_position, enemy.movement_heading);
-            }
-        }
-
-        //grab the speed
-        float current_speed = enemy_speed_;
-        if (enemy.enemy_behaviour == EnemyBehaviour::kamikaze && enemy.kamikaze_state == KamikazeState::charging)
-        {
-            current_speed = speed_kamikaze_charge_;
-        }
-
-        const Vector2 displacement = direction * (current_speed * delta_time);
     }
 
     void Application::check_player_enemy_contact()
@@ -768,9 +838,21 @@ namespace kotte
             const RenderLayer layer = visible_candidate->kind == EntityKind::bomb
                 ? RenderLayer::ground
                 : RenderLayer::world;
+            Color color = entity_color(visible_candidate->kind);
+            {
+                if (visible_candidate->enemy_behaviour == EnemyBehaviour::pursue)
+                {
+                    color = pursue_enemy_color_;
+                }
+                else if (visible_candidate->enemy_behaviour == EnemyBehaviour::kamikaze)
+                {
+                    color = kamikaze_enemy_color_;
+                }
+            }
+
             renderer_.submit({
                 bounds,
-                entity_color(visible_candidate->kind),
+                color,
                 layer,
                 visible_candidate->world_position.y,
                 entity_roundness(visible_candidate->kind)
@@ -778,6 +860,33 @@ namespace kotte
         }
         renderer_.sort();
         renderer_.execute();
+
+        for (const EntityHandle entity_handle : spatial_query.entity_handles)
+        {
+            const Entity* visible_candidate = entities_.try_get(entity_handle);
+            if (visible_candidate == nullptr
+                || visible_candidate->kind != EntityKind::enemy
+                || visible_candidate->enemy_behaviour != EnemyBehaviour::kamikaze
+                || visible_candidate->kamikaze_state != KamikazeState::charging)
+            {
+                continue;
+            }
+
+            const Rectangle world_bounds = entity_world_bounds(*visible_candidate);
+            if (!CheckCollisionRecs(world_bounds, world_view))
+            {
+                continue;
+            }
+
+            const Vector2 screen_top_left = camera_.world_to_screen({ world_bounds.x, world_bounds.y });
+            const std::string timer_text = std::format("{:.1f}", visible_candidate->explosion_timer);
+            DrawText(
+                timer_text.c_str(),
+                static_cast<int>(std::floor(screen_top_left.x)),
+                static_cast<int>(std::floor(screen_top_left.y)) - 20,
+                20,
+                YELLOW);
+        }
 
         std::string diagnostics;
         const double percent_of_entities = entities_.live_count() == 0
@@ -841,7 +950,7 @@ namespace kotte
         const Color state_color = round_state_ == RoundState::playing ? GREEN
             : (round_state_ == RoundState::won ? GOLD : RED);
         DrawText(
-            std::format("state: {} | objective: defeat all enemies ({} left)",
+            std::format("state: {} | range::{}/{} | enemies left: {}",
                 state_text,
                 max_bomb_blast_range_,
                 current_blast_range_,
@@ -868,6 +977,7 @@ namespace kotte
 
         place_bomb_requests_.clear();
         bomb_detonated_facts_.clear();
+        square_blast_facts_.clear();
         destroy_entity_requests_.clear();
         blast_effects_.clear();
         frame_actions_ = {};
@@ -900,7 +1010,8 @@ namespace kotte
         {
             for (int x = 1; x < map_.width() - 1; ++x)
             {
-                if ((x == 2 && y == 2) || map_.at(x, y).type != TileType::floor || !random_.coin_flip(0.25f))
+                if ((x == 2 && y == 2) || (x ==3 && y==2)
+                    || map_.at(x, y).type != TileType::floor || !random_.coin_flip(0.25f))
                 {
                     continue;
                 }
@@ -930,7 +1041,8 @@ namespace kotte
     }
 
     void Application::initialize_enemies()
-    {
+    {   
+        std::size_t index = 0;
         // Finish every world-generation roll before drawing runtime headings.
         // This preserves the complete Week 4 layout for the reference seed.
         for (const EntityHandle enemy_handle : enemy_handles_)
@@ -938,7 +1050,24 @@ namespace kotte
             Entity& enemy = entity(enemy_handle);
             enemy.movement_heading = static_cast<CardinalDirection>(
                 random_.next<4, std::uint8_t>());
-            enemy.enemy_behaviour = ()
+            const std::size_t type_slot = index % 3;
+            if (type_slot == 0)
+            {
+                enemy.enemy_behaviour = EnemyBehaviour::patrol;
+            }
+            else if (type_slot == 1)
+            {
+                enemy.enemy_behaviour = EnemyBehaviour::pursue;
+            }
+            else
+            {
+                enemy.enemy_behaviour = EnemyBehaviour::kamikaze;
+                enemy.kamikaze_state = KamikazeState::searching;
+            }
+
+            enemy.decision_timer = enemy_decision_interval_;
+            enemy.explosion_timer = 0.0f;
+            ++index;
         }
     }
 
@@ -994,6 +1123,7 @@ namespace kotte
         case EntityKind::bomb: size = { 18.0f, 12.0f }; break;
         case EntityKind::crate: size = { 32.0f, 32.0f }; break;
         case EntityKind::enemy: size = { 24.0f, 14.0f }; break;
+        case EntityKind::pickup: size = { 20.0f, 20.0f }; break;
         }
 
         const Vector2 top_left = entity.world_position - Vector2{ size.x / 2.0f, size.y };
@@ -1116,6 +1246,38 @@ namespace kotte
         return static_cast<CardinalDirection>(new_value);
     }
 
+    CardinalDirection Application::pursuit_enemy_direction(
+        Vector2 enemy_position,
+        CardinalDirection current_direction) const noexcept
+    {
+        const Entity* player_entity = entities_.try_get(player_handle_);
+        if (player_entity == nullptr)
+        {
+            return current_direction;
+        }
+
+        const Vector2 delta = player_entity->world_position - enemy_position;
+        if (delta.x == 0.0f && delta.y == 0.0f)
+        {
+            return current_direction;
+        }
+
+        if (std::abs(delta.x) >= std::abs(delta.y))
+        {
+            return delta.x > 0.0f ? CardinalDirection::right : CardinalDirection::left;
+        }
+        return delta.y > 0.0f ? CardinalDirection::down : CardinalDirection::up;
+    }
+
+    float Application::enemy_movement_speed(const Entity& enemy) noexcept
+    {
+        if (enemy.enemy_behaviour == EnemyBehaviour::kamikaze
+            && enemy.kamikaze_state == KamikazeState::charging)
+        {
+            return kamikaze_charge_speed_;
+        }
+        return enemy_speed_;
+    }
     bool Application::owner_has_active_bomb(EntityHandle owner) const noexcept
     {
         return std::ranges::any_of(active_bomb_handles_, [this, owner](EntityHandle bomb_handle)

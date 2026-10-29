@@ -26,11 +26,11 @@ namespace kotte
     enum class EnemyBehaviour : std::uint8_t
     {
         patrol,
-        pursue，
+        pursue,
         kamikaze
     };
     //third enemy type
-    enum class KamikazeState : std::uint6_t
+    enum class KamikazeState : std::uint8_t
     {
         searching,
         charging,
@@ -50,7 +50,7 @@ namespace kotte
         CardinalDirection movement_heading = CardinalDirection::right;
 
         EnemyBehaviour enemy_behaviour = EnemyBehaviour::patrol;
-        KamikzeState kamikaze_state = KamikazeSate::searching;
+        KamikazeState kamikaze_state = KamikazeState::searching;
         float explosion_timer = 0.0f;
         float decision_timer = 0.0f;
 
