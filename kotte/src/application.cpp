@@ -640,7 +640,7 @@ namespace kotte
         {
             const Entity* owner = entities_.try_get(request.owner);
             if (owner == nullptr || owner->kind != EntityKind::player
-                || owner_has_active_bomb(request.owner))
+                || owner_at_bomb_capacity(request.owner))
             {
                 continue;
             }
@@ -1336,15 +1336,16 @@ namespace kotte
         }
         return enemy_speed_;
     }
-    bool Application::owner_has_active_bomb(EntityHandle owner) const noexcept
+    bool Application::owner_at_bomb_capacity(EntityHandle owner) const noexcept
     {
-        return std::ranges::any_of(active_bomb_handles_, [this, owner](EntityHandle bomb_handle)
+        const auto bomb_count = std::ranges::count_if(active_bomb_handles_, [this, owner](EntityHandle bomb_handle)
             {
                 const Entity* bomb = entities_.try_get(bomb_handle);
                 return bomb != nullptr
                     && bomb->bomb_state.has_value()
                     && bomb->bomb_state->owner == owner;
             });
+        return bomb_count >= max_bombs_per_owner_;
     }
 
     Vector2 Application::tile_centre(Vector2 world_position) noexcept

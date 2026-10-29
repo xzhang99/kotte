@@ -145,7 +145,8 @@ namespace kotte
             Vector2 enemy_position,
             CardinalDirection current_direction) const noexcept;
         [[nodiscard]] static float enemy_movement_speed(const Entity& enemy) noexcept;
-        [[nodiscard]] bool owner_has_active_bomb(EntityHandle owner) const noexcept;
+        //[[nodiscard]] bool owner_has_active_bomb(EntityHandle owner) const noexcept;
+        [[nodiscard]] bool owner_at_bomb_capacity(EntityHandle owner) const noexcept;
         [[nodiscard]] static Vector2 tile_centre(Vector2 world_position) noexcept;
         [[nodiscard]] static Vector2 tile_centre(int column, int row) noexcept;
         [[nodiscard]] static Color entity_color(EntityKind kind) noexcept;
@@ -168,6 +169,7 @@ namespace kotte
         static constexpr std::uint8_t kamikaze_blast_radius_tiles_ = 2;
         static constexpr float enemy_direction_interval_ = 0.25f;
         static constexpr float bomb_fuse_seconds_ = 2.0f;
+        static constexpr std::size_t max_bombs_per_owner_ = 3;
         //3enemy behaviours
         static constexpr float speed_patrol_ = 80.0f;
         static constexpr float speed_pursue_ = 80.0f;
