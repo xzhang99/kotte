@@ -279,11 +279,6 @@ namespace kotte
 
         if (round_state_ == RoundState::playing && player_hit_this_frame_)
         {
-            destroy_entity_requests_.push_back({ player_handle_ });
-        }
-
-        if (round_state_ == RoundState::playing && player_hit_this_frame_)
-        {
             /*round_state_ = RoundState::lost;*/
             destroy_entity_requests_.push_back({ player_handle_ });
         }
@@ -446,7 +441,8 @@ namespace kotte
                 Entity* candidate = entities_.try_get(handle);
                 if (candidate == nullptr || candidate->kind != EntityKind::bomb
                     || !candidate->bomb_state.has_value()
-                    || candidate->bomb_state->owner_overlapping)
+                    || candidate->bomb_state->owner_overlapping
+                    || candidate->bomb_state->is_moving)//lock the bomb direction once the key is pressed per frame,incase the player presses WD at the same time causing it to overwritten the previous frame
                 {
                     continue;
                 }
@@ -488,7 +484,7 @@ namespace kotte
             const Vector2 proposed_position = bomb->world_position + step;
 
             //the bomb slips inside enemies since is_solid == false, it just get stucked in the same pos rn
-            //special check for enemies
+            //special check for enemies, when hit_enemy returns true,snap it to center
             bool hit_enemy = false;
             Entity probe = *bomb;
             probe.world_position = proposed_position;
@@ -505,12 +501,14 @@ namespace kotte
                 }
             }
 
-            //when its blocked, snap it to grid
+            
             if (hit_enemy|| entity_movement_is_blocked(bomb_handle, proposed_position))
             {
                 bomb->bomb_state->is_moving = false;
-                bomb->world_position = tile_centre(bomb->world_position);
-                spatial_grid_.update(bomb_handle, old_world_bounds, entity_world_bounds(*bomb));
+                /*bomb->world_position = tile_centre(bomb->world_position);
+                spatial_grid_.update(bomb_handle, old_world_bounds, entity_world_bounds(*bomb));*/
+                //this causes bomb to teleport and go through the grids and it move INTO player when the player when the player stays too close to the grid and freeze the player
+                //so I just make sure it only stop before the bomb hit the grid
                 continue;
             }
 
@@ -673,7 +671,7 @@ namespace kotte
                 {
                     const Entity* bomb = entities_.try_get(bomb_handle);
                     return bomb != nullptr
-                        && Vector2Equals(bomb->world_position, request.world_position);
+                        && Vector2Equals(tile_centre(bomb->world_position), request.world_position);//prevent placing bomb on top the stopped bomb
                 });
             if (tile_occupied)
             {
@@ -1029,10 +1027,12 @@ namespace kotte
         const Color state_color = round_state_ == RoundState::playing ? GREEN
             : (round_state_ == RoundState::won ? GOLD : RED);
         DrawText(
-            std::format("state: {} | range::{}/{} | enemies left: {}",
+            std::format("state: {} | range::{}/{} | bombs:{}/{} | enemies left: {}",
                 state_text,
                 max_bomb_blast_range_,
                 current_blast_range_,
+                active_bomb_handles_.size(),
+                max_bombs_per_owner_,
                 enemy_handles_.size()).c_str(), 10, 130, 24, state_color);
     }
 

@@ -167,13 +167,9 @@ namespace kotte
         static constexpr float kamikaze_charge_speed_ = 180.0f;
         static constexpr float enemy_decision_interval_ = 0.25f;
         static constexpr std::uint8_t kamikaze_blast_radius_tiles_ = 2;
-        static constexpr float enemy_direction_interval_ = 0.25f;
         static constexpr float bomb_fuse_seconds_ = 2.0f;
         static constexpr std::size_t max_bombs_per_owner_ = 3;
         //3enemy behaviours
-        static constexpr float speed_patrol_ = 80.0f;
-        static constexpr float speed_pursue_ = 80.0f;
-        static constexpr float speed_kamikaze_charge_ = 180.0f;
         static constexpr float kamikaze_fuse_seconds_ = 2.0f;
         static constexpr float kamikaze_detect_radius_ = 160.0f;
         static constexpr std::uint8_t bomb_blast_range_ = 3;
@@ -194,7 +190,7 @@ namespace kotte
         static constexpr Color kamikaze_enemy_color_{ 0xff, 0x59, 0x5e, 0xff };
 
         static constexpr Color wall_color_{ 0x78, 0x5f, 0x47, 0xff };
-        static constexpr Color pickup_color_{ 0x4e, 0xd9, 0x8f, 0xff };;
+        static constexpr Color pickup_color_{ 0x4e, 0xd9, 0x8f, 0xff };
 
         Window window_; // Constructed first, destroyed last.
         Camera camera_;
