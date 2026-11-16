@@ -1,6 +1,7 @@
 #pragma once
 
 #include "kotte/camera.hpp"
+#include "kotte/config.hpp"
 #include "kotte/entity.hpp"
 #include "kotte/entity_store.hpp"
 #include "kotte/random.hpp"
@@ -39,7 +40,7 @@ namespace kotte
             int window_width,
             int window_height,
             std::string_view title,
-            std::uint64_t seed,
+            const quicktype::Config& config,
             int target_fps = 0);
 
         Application(const Application&) = delete;
@@ -210,7 +211,7 @@ namespace kotte
         std::vector<DestroyEntityRequest> destroy_entity_requests_;
         std::vector<BlastEffect> blast_effects_;
         CollisionDiagnostics collision_diagnostics_;
-        std::uint64_t seed_;
+        quicktype::Config config_;
         EntityHandle player_handle_;
         RoundState round_state_ = RoundState::playing;
         std::uint8_t current_blast_range_ = bomb_blast_range_;
