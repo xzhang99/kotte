@@ -14,19 +14,16 @@ namespace kotte
         int width,
         int height,
         std::string_view title,
-        const quicktype::Config& config,
+        std::uint64_t seed,
         int target_fps)
         : window_{ width, height, title, target_fps }
         , camera_{ window_.size() }
-        , random_{ static_cast<std::uint64_t>(config.get_seed()) }
-        , map_{ make_room(
-            static_cast<int>(config.get_tile_map_width()),
-            static_cast<int>(config.get_tile_map_height()),
-            random_) }
+        , random_{ seed }
+        , map_{ make_room(gameplay_room_width_, gameplay_room_height_, random_) }
         , spatial_grid_{ {
             static_cast<float>(map_.width() * tile_size_),
             static_cast<float>(map_.height() * tile_size_) }, spatial_cell_size_ }
-        , config_{ config }
+            , seed_{ seed }
     {
         populate_entities();
         initialize_enemies();
@@ -1016,7 +1013,7 @@ namespace kotte
             collision_diagnostics_.contacts);
         DrawText(diagnostics.c_str(), 10, 106, 20, RAYWHITE);
 
-        diagnostics = std::format("seed: {}", config_.get_seed());
+        diagnostics = std::format("seed: {}", seed_);
         DrawText(diagnostics.c_str(), 10, window_.height() - 78, 20, RAYWHITE);
 
         diagnostics = std::format(
@@ -1041,16 +1038,11 @@ namespace kotte
 
     void Application::restart_round()
     {
-        const int width = stress_mode_
-            ? stress_room_width_
-            : static_cast<int>(config_.get_tile_map_width());
-        const int height = stress_mode_
-            ? stress_room_height_
-            : static_cast<int>(config_.get_tile_map_height());
+        const int room_width = stress_mode_ ? stress_room_width_ : gameplay_room_width_;
+        const int room_height = stress_mode_ ? stress_room_height_ : gameplay_room_height_;
 
-        random_ = Random{ static_cast<std::uint64_t>(config_.get_seed()) };
-        map_ = make_room(width, height, random_);
-
+        random_ = Random{ seed_ };
+        map_ = make_room(room_width, room_height, random_);
         entities_ = EntityStore{};
         enemy_handles_.clear();
         active_bomb_handles_.clear();

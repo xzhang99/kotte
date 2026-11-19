@@ -66,7 +66,7 @@
       <PreprocessorDefinitions>_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <AdditionalIncludeDirectories>.\include;..\vendor\raylib\include;..\vendor\cpp_prngs\include;..\vendor\nlohmann_json\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\include;..\vendor\raylib\include;..\vendor\cpp_prngs\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <TreatWarningAsError>true</TreatWarningAsError>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -89,7 +89,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <AdditionalIncludeDirectories>.\include;..\vendor\raylib\include;..\vendor\cpp_prngs\include;..\vendor\nlohmann_json\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>.\include;..\vendor\raylib\include;..\vendor\cpp_prngs\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <TreatWarningAsError>true</TreatWarningAsError>
     </ClCompile>
@@ -115,7 +115,6 @@
   <ItemGroup>
     <ClInclude Include="include\kotte\application.hpp" />
     <ClInclude Include="include\kotte\camera.hpp" />
-    <ClInclude Include="include\kotte\config.hpp" />
     <ClInclude Include="include\kotte\entity.hpp" />
     <ClInclude Include="include\kotte\entity_handle.hpp" />
     <ClInclude Include="include\kotte\entity_store.hpp" />
