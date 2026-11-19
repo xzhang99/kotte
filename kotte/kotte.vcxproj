@@ -92,6 +92,7 @@
       <AdditionalIncludeDirectories>.\include;..\vendor\raylib\include;..\vendor\cpp_prngs\include;..\vendor\nlohmann_json\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <TreatWarningAsError>true</TreatWarningAsError>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -106,6 +107,7 @@
     <ClCompile Include="src\application.cpp" />
     <ClCompile Include="src\camera.cpp" />
     <ClCompile Include="src\entity_store.cpp" />
+    <ClCompile Include="src\input.cpp" />
     <ClCompile Include="src\main.cpp" />
     <ClCompile Include="src\renderer.cpp" />
     <ClCompile Include="src\spatial_grid.cpp" />
@@ -119,6 +121,7 @@
     <ClInclude Include="include\kotte\entity.hpp" />
     <ClInclude Include="include\kotte\entity_handle.hpp" />
     <ClInclude Include="include\kotte\entity_store.hpp" />
+    <ClInclude Include="include\kotte\input.hpp" />
     <ClInclude Include="include\kotte\random.hpp" />
     <ClInclude Include="include\kotte\renderer.hpp" />
     <ClInclude Include="include\kotte\spatial_grid.hpp" />

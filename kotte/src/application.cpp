@@ -28,6 +28,7 @@ namespace kotte
             static_cast<float>(map_.height() * tile_size_) }, spatial_cell_size_ }
         , config_{ config }
     {
+        initialize_input();
         populate_entities();
         initialize_enemies();
     }
@@ -89,31 +90,15 @@ namespace kotte
         {
             return;
         }
-        frame_actions_.place_bomb = IsKeyPressed(KEY_SPACE);
-
-        Vector2& movement_direction = frame_actions_.player_movement_direction;
-        if (IsKeyDown(KEY_LEFT) || IsKeyDown(KEY_A))
+        
+        if (input_.pressed(Action::quit))
         {
-            movement_direction.x -= 1.0f;
-        }
-        if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D))
-        {
-            movement_direction.x += 1.0f;
-        }
-        if (IsKeyDown(KEY_UP) || IsKeyDown(KEY_W))
-        {
-            movement_direction.y -= 1.0f;
-        }
-        if (IsKeyDown(KEY_DOWN) || IsKeyDown(KEY_S))
-        {
-            movement_direction.y += 1.0f;
+            request_exit();
         }
 
-        // Normalize intent before simulation so bindings cannot change movement speed.
-        if (movement_direction.x != 0.0f || movement_direction.y != 0.0f)
-        {
-            movement_direction = Vector2Normalize(movement_direction);
-        }
+        frame_actions_.place_bomb = input_.pressed(Action::place_bomb);
+        frame_actions_.player_movement_direction = input_.get(Direction::move);
+
     }
 
     void Application::update_gameplay(float delta_time)
@@ -1411,6 +1396,24 @@ namespace kotte
     float Application::entity_roundness(EntityKind kind) noexcept
     {
         return kind == EntityKind::crate ? 0.15f : 0.8f;
+    }
+
+    //void Application::Initialize_input
+    //{
+    // gameplay
+    // gameplay
+    // }
+    void Application::initialize_input()
+    {
+        input_.bind(Action::quit, { KEY_ESCAPE });
+        input_.bind(Action::place_bomb, { KEY_SPACE });
+        input_.bind(
+            Direction::move,
+            { KEY_W, KEY_UP },
+            { KEY_S, KEY_DOWN },
+            { KEY_A, KEY_LEFT },
+            { KEY_D, KEY_RIGHT }
+        );
     }
 
     void Application::request_exit() noexcept

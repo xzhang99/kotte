@@ -9,6 +9,7 @@
 #include "kotte/spatial_grid.hpp"
 #include "kotte/tile_map.hpp"
 #include "kotte/window.hpp"
+#include "kotte/input.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -218,5 +219,11 @@ namespace kotte
         bool player_hit_this_frame_ = false;
         bool stress_mode_ = false;
         bool exit_requested_ = false;
+
+        //private:
+            //void initinput
+
+        void initialize_input();
+        Input input_{};
     };
 }
