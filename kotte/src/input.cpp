@@ -1,5 +1,9 @@
 #include "kotte/input.hpp"
+
 #include <raymath.h>
+#include <stdexcept>
+#include <string>
+#include <unordered_map>
 #include <utility>
 //tommi's code
 // InputContext {
@@ -48,6 +52,41 @@
 
 namespace kotte
 {
+    int key_from_name(const std::string& name)
+    {
+        static const std::unordered_map<std::string, int> keys{
+            { "A", KEY_A },{ "B", KEY_B },{ "C", KEY_C },{ "D", KEY_D },{ "E", KEY_E },
+            { "F", KEY_F },{ "G", KEY_G },{ "H", KEY_H },{ "I", KEY_I },{ "J", KEY_J },
+            { "K", KEY_K },{ "L", KEY_L },{ "M", KEY_M },{ "N", KEY_N },{ "O", KEY_O },
+            { "P", KEY_P },{ "Q", KEY_Q },{ "R", KEY_R },{ "S", KEY_S },{ "T", KEY_T },
+            { "U", KEY_U },{ "V", KEY_V },{ "W", KEY_W },{ "X", KEY_X },{ "Y", KEY_Y },
+            { "Z", KEY_Z },
+            { "ZERO", KEY_ZERO },{ "ONE", KEY_ONE },{ "TWO", KEY_TWO },{ "THREE", KEY_THREE },
+            { "FOUR", KEY_FOUR },{ "FIVE", KEY_FIVE },{ "SIX", KEY_SIX },{ "SEVEN", KEY_SEVEN },
+            { "EIGHT", KEY_EIGHT },{ "NINE", KEY_NINE },
+            { "UP", KEY_UP },{ "DOWN", KEY_DOWN },{ "LEFT", KEY_LEFT },{ "RIGHT", KEY_RIGHT },
+            { "SPACE", KEY_SPACE },{ "ESCAPE", KEY_ESCAPE },{ "ENTER", KEY_ENTER },{ "TAB", KEY_TAB },
+            { "BACKSPACE", KEY_BACKSPACE },
+            { "LEFT_SHIFT", KEY_LEFT_SHIFT },{ "RIGHT_SHIFT", KEY_RIGHT_SHIFT },
+            { "LEFT_CONTROL", KEY_LEFT_CONTROL },{ "RIGHT_CONTROL", KEY_RIGHT_CONTROL },
+            { "LEFT_ALT", KEY_LEFT_ALT },{ "RIGHT_ALT", KEY_RIGHT_ALT },
+        };
+
+        const auto it = keys.find(name);
+        if (it == keys.end())
+        {
+            throw std::runtime_error{ "Unknown key binding: \"" + name + "\"" };
+        }
+        return it->second;
+    }
+
+    Input::Input(const Config& config)
+    {
+        bind(Action::place_bomb, { key_from_name(config.input.place_bomb) });
+        // TODO: bind quit and Direction::move from config.input the same way,
+        // once Application stops binding them itself.
+    }
+
     void Input::bind(Action action, std::vector<int> keys)
     {
         actions_[action] = std::move(keys);

@@ -14,14 +14,15 @@ namespace kotte
         int width,
         int height,
         std::string_view title,
-        const quicktype::Config& config,
+        const Config& config,
         int target_fps)
         : window_{ width, height, title, target_fps }
+        , input_{ config}
         , camera_{ window_.size() }
-        , random_{ static_cast<std::uint64_t>(config.get_seed()) }
+        , random_{ static_cast<std::uint64_t>(config.seed) }
         , map_{ make_room(
-            static_cast<int>(config.get_tile_map_width()),
-            static_cast<int>(config.get_tile_map_height()),
+            static_cast<int>(config.tile_map_width),
+            static_cast<int>(config.tile_map_height),
             random_) }
         , spatial_grid_{ {
             static_cast<float>(map_.width() * tile_size_),
@@ -79,21 +80,14 @@ namespace kotte
 
     void Application::collect_frame_actions() noexcept
     {
-        if (IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_Q))
-        {
-            request_exit();
-        }
-        frame_actions_.restart_round = IsKeyPressed(KEY_R);
-        frame_actions_.select_gameplay_config = IsKeyPressed(KEY_ONE);
-        frame_actions_.select_stress_config = IsKeyPressed(KEY_TWO);
-        if (round_state_ != RoundState::playing)
-        {
-            return;
-        }
-        
         if (input_.pressed(Action::quit))
         {
             request_exit();
+        }
+
+        if (round_state_ != RoundState::playing)
+        {
+            return;
         }
 
         frame_actions_.place_bomb = input_.pressed(Action::place_bomb);
@@ -1001,14 +995,22 @@ namespace kotte
             collision_diagnostics_.contacts);
         DrawText(diagnostics.c_str(), 10, 106, 20, RAYWHITE);
 
-        diagnostics = std::format("seed: {}", config_.get_seed());
+        diagnostics = std::format("seed: {}", config_.seed);
         DrawText(diagnostics.c_str(), 10, window_.height() - 78, 20, RAYWHITE);
 
         diagnostics = std::format(
             "world: {} x {} tiles | {} total", map_.width(), map_.height(), map_.tile_count());
         DrawText(diagnostics.c_str(), 10, window_.height() - 54, 20, RAYWHITE);
 
-        DrawText("move: WASD/arrows | bomb: Space | quit: Q/Escape", 10, window_.height() - 30, 20, LIGHTGRAY);
+        diagnostics = std::format(
+            "move: {}/{}/{}/{} | bomb: {} | quit: {}",
+            config_.input.move_up,
+            config_.input.move_down,
+            config_.input.move_left,
+            config_.input.move_right,
+            config_.input.place_bomb,
+            config_.input.quit);
+        DrawText(diagnostics.c_str(), 10, window_.height() - 30, 20, LIGHTGRAY);
 
         const char* state_text = round_state_ == RoundState::playing ? "PLAYING"
             : (round_state_ == RoundState::won ? "WON" : "LOST");
@@ -1028,12 +1030,12 @@ namespace kotte
     {
         const int width = stress_mode_
             ? stress_room_width_
-            : static_cast<int>(config_.get_tile_map_width());
+            : static_cast<int>(config_.tile_map_width);
         const int height = stress_mode_
             ? stress_room_height_
-            : static_cast<int>(config_.get_tile_map_height());
+            : static_cast<int>(config_.tile_map_height);
 
-        random_ = Random{ static_cast<std::uint64_t>(config_.get_seed()) };
+        random_ = Random{ static_cast<std::uint64_t>(config_.seed) };
         map_ = make_room(width, height, random_);
 
         entities_ = EntityStore{};
@@ -1398,15 +1400,10 @@ namespace kotte
         return kind == EntityKind::crate ? 0.15f : 0.8f;
     }
 
-    //void Application::Initialize_input
-    //{
-    // gameplay
-    // gameplay
-    // }
+  
     void Application::initialize_input()
     {
-        input_.bind(Action::quit, { KEY_ESCAPE });
-        input_.bind(Action::place_bomb, { KEY_SPACE });
+        input_.bind(Action::quit, { KEY_ESCAPE, KEY_Q });
         input_.bind(
             Direction::move,
             { KEY_W, KEY_UP },
@@ -1414,6 +1411,10 @@ namespace kotte
             { KEY_A, KEY_LEFT },
             { KEY_D, KEY_RIGHT }
         );
+        // TODO: once move_up, move_down, move_left, move_right and quit are
+        // read from config.input the same way Input's constructor already
+        // reads place_bomb, these two bind() calls can move into Input's
+        // constructor too and disappear from here.
     }
 
     void Application::request_exit() noexcept

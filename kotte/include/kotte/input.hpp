@@ -1,7 +1,11 @@
 #pragma once
+
+#include "kotte/config.hpp"
+
 #include <raylib.h>
-#include <vector>
+#include <string>
 #include <unordered_map>
+#include <vector>
 //tommi's codes
 //enum the Action q. what is enum class? say enmu class Action{}
 
@@ -28,6 +32,7 @@
 
 namespace kotte
 {
+    [[nodiscard]] int key_from_name(const std::string& name);
     enum class Action
     {
         quit,
@@ -42,7 +47,7 @@ namespace kotte
     class Input final
     {
     public:
-        Input() = default;
+        explicit Input(const Config& config);
 
         void bind(Action action, std::vector<int> keys);
         void bind(
