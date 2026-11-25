@@ -279,37 +279,8 @@ namespace kotte
 
         if (round_state_ == RoundState::playing && player_hit_this_frame_)
         {
-            /*round_state_ = RoundState::lost;*/
             destroy_entity_requests_.push_back({ player_handle_ });
         }
-
-        //resolving the new detonation using spatial_grid and narrow filtering
-
-        //for (const auto& fact : square_blast_facts_)
-        //{
-        //    Rectangle blast_box = {
-        //        fact.world_position.x - (fact.radius * tile_size_),
-        //        fact.world_position.y - (fact.radius * tile_size_),
-        //        (fact.radius * 2 + 1) * tile_size_,
-        //        (fact.radius * 2 + 1) * tile_size_
-        //    };
-
-        //    const SpatialQuery contacts = spatial_grid_.query(blast_box);
-        //    for (const EntityHandle handle : contacts.entity_handles)
-        //    {
-        //        const Entity* candidate = entities_.try_get(handle);
-        //        if (candidate && CheckCollisionRecs(blast_box, entity_collision_bounds(*candidate)))
-        //        {
-        //            destroy_entity_requests_.push_back({ handle });
-        //        }
-        //    }
-
-        //    destroy_entity_requests_.push_back({ fact.enemy });
-
-
-
-            //vfx for blast effects later
-
     }
 
     void Application::apply_structural_mutations()
@@ -483,9 +454,8 @@ namespace kotte
             const Vector2 step = cardinal_vector(bomb->bomb_state->move_direction) * (bomb_slide_speed_ * delta_time);
             const Vector2 proposed_position = bomb->world_position + step;
 
-            //the bomb slips inside enemies since is_solid == false, it just get stucked in the same pos rn
-            //special check for enemies, when hit_enemy returns true,snap it to center
-            bool hit_enemy = false;
+            
+            bool hit_mover = false;
             Entity probe = *bomb;
             probe.world_position = proposed_position;
             const Rectangle proposed_bounds = entity_collision_bounds(probe);
@@ -493,22 +463,19 @@ namespace kotte
             spatial_grid_.query(proposed_bounds).entity_handles)
             {
                 const Entity* candidate = entities_.try_get(candidate_handle);
-                if (candidate != nullptr && candidate->kind == EntityKind::enemy
+                if (candidate != nullptr 
+                    && (candidate->kind == EntityKind::enemy || candidate ->kind == EntityKind::player)
                     && CheckCollisionRecs(proposed_bounds, entity_collision_bounds(*candidate)))
                 {
-                    hit_enemy = true;
+                    hit_mover = true;
                     break;
                 }
             }
 
             
-            if (hit_enemy|| entity_movement_is_blocked(bomb_handle, proposed_position))
+            if (hit_mover|| entity_movement_is_blocked(bomb_handle, proposed_position))
             {
                 bomb->bomb_state->is_moving = false;
-                /*bomb->world_position = tile_centre(bomb->world_position);
-                spatial_grid_.update(bomb_handle, old_world_bounds, entity_world_bounds(*bomb));*/
-                //this causes bomb to teleport and go through the grids and it move INTO player when the player when the player stays too close to the grid and freeze the player
-                //so I just make sure it only stop before the bomb hit the grid
                 continue;
             }
 
@@ -1027,10 +994,10 @@ namespace kotte
         const Color state_color = round_state_ == RoundState::playing ? GREEN
             : (round_state_ == RoundState::won ? GOLD : RED);
         DrawText(
-            std::format("state: {} | range::{}/{} | bombs:{}/{} | enemies left: {}",
-                state_text,
-                max_bomb_blast_range_,
+            std::format("state: {} | range:{}/{} | bombs:{}/{} | enemies left: {}",
+                state_text,             
                 current_blast_range_,
+                max_bomb_blast_range_,
                 active_bomb_handles_.size(),
                 max_bombs_per_owner_,
                 enemy_handles_.size()).c_str(), 10, 130, 24, state_color);
@@ -1098,7 +1065,8 @@ namespace kotte
                 const std::uint8_t kind_roll = random_.next<20, std::uint8_t>();
                 // Week 3's inert bomb markers are no longer needed: every bomb
                 // now enters the world through the explicit lifetime path.
-                if (kind_roll >= 15 && kind_roll < 19)
+                const std::uint8_t enemy_threshold = stress_mode_ ? 19 : 16;
+                if (kind_roll >= 15 && kind_roll < enemy_threshold)
                 {
                     continue;
                 }
