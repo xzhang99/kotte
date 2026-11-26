@@ -117,6 +117,11 @@ namespace kotte
             BlastEffect& effect,
             int column,
             int row);
+        [[nodiscard]] bool blast_tile_is_blocked_by_wall(
+            int origin_column,
+            int origin_row,
+            int target_column,
+            int target_row) const noexcept;
         void append_blast_ray(
             BlastEffect& effect,
             int origin_column,
@@ -145,7 +150,6 @@ namespace kotte
             Vector2 enemy_position,
             CardinalDirection current_direction) const noexcept;
         [[nodiscard]] static float enemy_movement_speed(const Entity& enemy) noexcept;
-        //[[nodiscard]] bool owner_has_active_bomb(EntityHandle owner) const noexcept;
         [[nodiscard]] bool owner_at_bomb_capacity(EntityHandle owner) const noexcept;
         [[nodiscard]] static Vector2 tile_centre(Vector2 world_position) noexcept;
         [[nodiscard]] static Vector2 tile_centre(int column, int row) noexcept;

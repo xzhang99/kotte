@@ -192,10 +192,145 @@ namespace kotte
         }
     }
 
+    bool Application::blast_tile_is_blocked_by_wall(
+        int origin_column,
+        int origin_row,
+        int target_column,
+        int target_row) const noexcept
+    {
+        if (!map_.contains(target_column, target_row)
+            || map_.at(target_column, target_row).type == TileType::wall)
+        {
+            return true;
+        }
+
+        const int delta_col = target_column - origin_column;
+        const int delta_row = target_row - origin_row;
+        const int steps = std::max(std::abs(delta_col), std::abs(delta_row));
+        if (steps == 0)
+        {
+            return false;
+        }
+
+        const Vector2 start = tile_centre(origin_column, origin_row);
+        const Vector2 end = tile_centre(target_column, target_row);
+        const float tile_extent = static_cast<float>(tile_size_);
+        const int samples = steps * 4 + 1;
+
+        int prev_col = origin_column;
+        int prev_row = origin_row;
+
+        for (int i = 1; i < samples; ++i)
+        {
+            const float t = static_cast<float>(i) / static_cast<float>(samples);
+            const float sample_x = start.x + (end.x - start.x) * t;
+            const float sample_y = start.y + (end.y - start.y) * t;
+            const int col = static_cast<int>(std::floor(sample_x / tile_extent));
+            const int row = static_cast<int>(std::floor(sample_y / tile_extent));
+
+            if (!map_.contains(col, row) || map_.at(col, row).type == TileType::wall)
+            {
+                return true;
+            }
+
+            if (col != prev_col && row != prev_row)
+            {
+                const bool wall_a = !map_.contains(prev_col, row)
+                    || map_.at(prev_col, row).type == TileType::wall;
+                const bool wall_b = !map_.contains(col, prev_row)
+                    || map_.at(col, prev_row).type == TileType::wall;
+                if (wall_a && wall_b)
+                {
+                    return true;
+                }
+            }
+
+            prev_col = col;
+            prev_row = row;
+        }
+
+        return false;
+    }
+
     void Application::resolve_gameplay_facts()
     {
-        for (const BombDetonated& fact : bomb_detonated_facts_)
+        for (const SquareBlastFact& fact : square_blast_facts_)
         {
+            const float tile_extent = static_cast<float>(tile_size_);
+            const int centre_column = static_cast<int>(std::floor(fact.world_position.x / tile_extent));
+            const int centre_row = static_cast<int>(std::floor(fact.world_position.y / tile_extent));
+            const int radius = static_cast<int>(fact.radius_tiles);
+
+            BlastEffect effect;
+            effect.remaining_seconds = blast_effect_seconds_;
+
+            for (int row = centre_row - radius; row <= centre_row + radius; ++row)
+            {
+                for (int column = centre_column - radius; column <= centre_column + radius; ++column)
+                {
+                    if (blast_tile_is_blocked_by_wall(centre_column, centre_row, column, row))
+                    {
+                        continue;
+                    }
+
+                    effect.tile_centres.push_back(tile_centre(column, row));
+
+                    const Rectangle tile_bounds{
+                        static_cast<float>(column) * tile_extent,
+                        static_cast<float>(row) * tile_extent,
+                        tile_extent,
+                        tile_extent
+                    };
+
+                    const SpatialQuery contacts = spatial_grid_.query(tile_bounds);
+                    for (const EntityHandle handle : contacts.entity_handles)
+                    {
+                        Entity* candidate = entities_.try_get(handle);
+                        if (candidate == nullptr
+                            || !CheckCollisionRecs(tile_bounds, entity_collision_bounds(*candidate)))
+                        {
+                            continue;
+                        }
+
+                        switch (candidate->kind)
+                        {
+                        case EntityKind::bomb:
+                            if (candidate->bomb_state.has_value()
+                                && !candidate->bomb_state->detonation_requested)
+                            {
+                                BombState& state = *candidate->bomb_state;
+                                state.fuse_remaining = 0.0f;
+                                state.detonation_requested = true;
+                                bomb_detonated_facts_.push_back({
+                                    handle,
+                                    state.owner,
+                                    candidate->world_position,
+                                    state.blast_range
+                                    });
+                            }
+                            break;
+                        case EntityKind::enemy:
+                        case EntityKind::crate:
+                            destroy_entity_requests_.push_back({ handle });
+                            break;
+                        case EntityKind::player:
+                            player_hit_this_frame_ = true;
+                            break;
+                        case EntityKind::pickup:
+                            break;
+                        }
+                    }
+                }
+            }
+
+            blast_effects_.push_back(std::move(effect));
+            destroy_entity_requests_.push_back({ fact.attacker });
+        }
+        square_blast_facts_.clear();
+
+        for (std::size_t i = 0; i < bomb_detonated_facts_.size(); ++i)
+        {
+            const BombDetonated fact = bomb_detonated_facts_[i];
             BlastEffect effect;
             effect.remaining_seconds = blast_effect_seconds_;
             effect.tile_centres.reserve(static_cast<std::size_t>(fact.blast_range) * 4 + 1);
@@ -216,66 +351,7 @@ namespace kotte
 
             blast_effects_.push_back(std::move(effect));
         }
-
         bomb_detonated_facts_.clear();
-
-        for (const SquareBlastFact& fact : square_blast_facts_)
-        {
-            const float tile_extent = static_cast<float>(tile_size_);
-            const int centre_column = static_cast<int>(std::floor(fact.world_position.x / tile_extent));
-            const int centre_row = static_cast<int>(std::floor(fact.world_position.y / tile_extent));
-            const int radius = static_cast<int>(fact.radius_tiles);
-
-            BlastEffect effect;
-            effect.remaining_seconds = blast_effect_seconds_;
-            for (int row = centre_row - radius; row <= centre_row + radius; ++row)
-            {
-                for (int column = centre_column - radius; column <= centre_column + radius; ++column)
-                {
-                    if (!map_.contains(column, row) || map_.at(column, row).type == TileType::wall)
-                    {
-                        continue;
-                    }
-                    effect.tile_centres.push_back(tile_centre(column, row));
-                }
-            }
-            blast_effects_.push_back(std::move(effect));
-
-            const Rectangle blast_box{
-                static_cast<float>(centre_column - radius) * tile_extent,
-                static_cast<float>(centre_row - radius) * tile_extent,
-                static_cast<float>(radius * 2 + 1) * tile_extent,
-                static_cast<float>(radius * 2 + 1) * tile_extent
-            };
-
-            const SpatialQuery contacts = spatial_grid_.query(blast_box);
-            for (const EntityHandle handle : contacts.entity_handles)
-            {
-                const Entity* candidate = entities_.try_get(handle);
-                if (candidate == nullptr
-                    || !CheckCollisionRecs(blast_box, entity_collision_bounds(*candidate)))
-                {
-                    continue;
-                }
-
-                switch (candidate->kind)
-                {
-                case EntityKind::bomb:
-                case EntityKind::enemy:
-                case EntityKind::crate:
-                    destroy_entity_requests_.push_back({ handle });
-                    break;
-                case EntityKind::player:
-                    player_hit_this_frame_ = true;
-                    break;
-                case EntityKind::pickup:
-                    break;
-                }
-            }
-
-            destroy_entity_requests_.push_back({ fact.attacker });
-        }
-        square_blast_facts_.clear();
 
         if (round_state_ == RoundState::playing && player_hit_this_frame_)
         {
